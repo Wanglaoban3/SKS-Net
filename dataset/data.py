@@ -1,0 +1,90 @@
+'''
+dataset
+copy from PSPNet source code
+
+author: zacario li
+date: 2020-03-30
+'''
+
+import os
+import os.path
+import cv2
+import numpy as np
+from PIL import Image
+import time
+
+from torch.utils.data import Dataset
+import torch
+
+
+IMG_EXTENSIONS = ['.jpg', '.jpeg', '.png', '.ppm', '.bmp', '.pgm']
+
+
+def is_image_file(filename):
+    filename_lower = filename.lower()
+    return any(filename_lower.endswith(extension) for extension in IMG_EXTENSIONS)
+
+def make_dataset(split='train', data_root=None, data_list=None):
+    assert split in ['train', 'val', 'test']
+    data_list = os.path.join(data_root, data_list)
+    if not os.path.isfile(data_list):
+        raise (RuntimeError("Image list file do not exist: " + data_list + "\n"))
+    image_label_list = []
+    list_read = open(data_list).readlines()
+    print("Totally {} samples in {} set.".format(len(list_read), split))
+    print("Starting Checking image&label pair {} list...".format(split))
+    for line in list_read:
+        line = line.strip()
+        # if split == 'test':
+        #     if len(line_split) != 1:
+        #         raise (RuntimeError("Image list file read line error : " + line + "\n"))
+        #     image_name = os.path.join(data_root, line_split[0])
+        #     label_name = image_name  # just set place holder for label_name, not for use
+        # else:
+        #     if len(line_split) != 2:
+        #         raise (RuntimeError("Image list file read line error : " + line + "\n"))
+        if line != '\n':
+            image_name, label_name = os.path.join(data_root, line.split('\t')[0]), os.path.join(data_root, line.split('\t')[1])
+        else:
+            continue
+        '''
+        following check costs some time
+        if is_image_file(image_name) and is_image_file(label_name) and os.path.isfile(image_name) and os.path.isfile(label_name):
+            item = (image_name, label_name)
+            image_label_list.append(item)
+        else:
+            raise (RuntimeError("Image list file line error : " + line + "\n"))
+        '''
+        item = (image_name, label_name)
+        image_label_list.append(item)
+    print("Checking image&label pair {} list done!".format(split))
+    return image_label_list
+
+
+class SemData(Dataset):
+    def __init__(self, benchmark, split='train', data_root=None, data_list=None, transform=None):
+        self.benchmark = benchmark
+        self.split = split
+        self.data_list = make_dataset(split, data_root, data_list)
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.data_list)
+
+    def __getitem__(self, index):
+        image_path, label_path = self.data_list[index]
+        image = cv2.imread(image_path)
+        #image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        image = np.float32(image)
+        
+        label = Image.open(label_path)
+        label = np.array(label)# GRAY 1 channel ndarray with shape H * W
+        #print(f'{label_path}, {np.unique(label)}')
+        if image.shape[0] != label.shape[0] or image.shape[1] != label.shape[1]:
+            raise (RuntimeError("Image & label shape mismatch: " + image_path + " " + label_path + "\n"))
+        if self.transform is not None:
+            image, label = self.transform(image, label)
+        # some label(kos20/Part4_label.bmp) has label 2, we need to clamp it to 1
+        if label.max().cpu().item() > 100:
+            label = torch.where(label > 122, 1, 0)
+        return image, label
