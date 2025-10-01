@@ -15,6 +15,70 @@ class BasicBlock(nn.Module):
         x = self.relu(x)
         return x
 
+# 标准3x3卷积
+class ConvModule(nn.Module):
+    def __init__(self, in_channels, out_channels, kernel_size=3, stride=1, padding=1, groups=1, bias=False):
+        super(ConvModule, self).__init__()
+        self.conv = nn.Conv2d(in_channels, out_channels, kernel_size=kernel_size, stride=stride, padding=padding, groups=groups, bias=bias)
+        self.bn = nn.BatchNorm2d(out_channels)
+        self.relu = nn.ReLU(inplace=True)
+
+    def forward(self, x):
+        if hasattr(self, 'bn'):
+            x = self.conv(x)
+            x = self.bn(x)
+            x = self.relu(x)
+        else:
+            x = self.fused_conv(x)
+            x = self.relu(x)
+        return x
+    
+    def _fuse(self):
+        if not hasattr(self, 'bn'):
+            return
+        # 获取BN层的参数
+        bn_mean = self.bn.running_mean
+        bn_var = self.bn.running_var
+        bn_gamma = self.bn.weight
+        bn_beta = self.bn.bias
+        bn_eps = self.bn.eps
+
+        # 获取卷积层的权重
+        conv_weight = self.conv.weight
+
+        # 计算融合后的权重和偏置
+        std = torch.sqrt(bn_var + bn_eps)
+        bn_gamma = bn_gamma.view(-1, 1, 1, 1)  # [8, 1, 1, 1]
+        std = std.view(-1, 1, 1, 1)  # [8, 1, 1, 1]
+
+        # 融合后的权重
+        fused_weight = conv_weight * (bn_gamma / std)
+
+        # 融合后的偏置
+        fused_bias = bn_beta - bn_mean * (bn_gamma / std).squeeze()
+
+        # 创建新的融合卷积层
+        self.fused_conv = nn.Conv2d(
+            self.conv.in_channels,
+            self.conv.out_channels,
+            kernel_size=self.conv.kernel_size,
+            stride=self.conv.stride,
+            padding=self.conv.padding,
+            dilation=self.conv.dilation,
+            groups=self.conv.groups,
+            bias=True  # 融合后的卷积层需要有偏置
+        )
+
+        # 将融合后的权重和偏置复制到新的卷积层
+        self.fused_conv.weight = nn.Parameter(fused_weight, requires_grad=False)
+        self.fused_conv.bias = nn.Parameter(fused_bias, requires_grad=False)
+
+        # 删除原始的卷积层和BN层
+        self.__delattr__("conv")
+        self.__delattr__("bn")
+        return
+
+# 这是过去尝试的模块，后面的实现放在sksnet.py中了
 
 # 不要在每个卷积层后加bn，而是要把卷积后的结果加在一起后再bn，不然很难收敛，不要开bias
 class SkeletonStrengtheningBlock1(nn.Module):

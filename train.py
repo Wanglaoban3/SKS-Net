@@ -148,9 +148,7 @@ def sub_sn_train(model, training, optimizer, criterion, dataloader, currentepoch
 if __name__ == '__main__':
     start_time = time.time()
     parser = argparse.ArgumentParser()
-    parser.add_argument('--model_type', type=str, default='ss_net', choices=['dlasdd', 'seg_net', 'ss_net', 'ss_net2', 'ss_net3', 'deeplabv3', 'psp_net', 'u_net', 'edr_net', 'resunet_pp', 'pga_net', 'seg_former', 'a_net'])
-    parser.add_argument('--block', type=str, default='basic')
-    parser.add_argument('--attention', type=str, default='')
+    parser.add_argument('--model_type', type=str, default='ss_net', choices=['seg_net', 'ss_net', 'deeplabv3', 'psp_net', 'u_net', 'edr_net', 'resunet_pp', 'pga_net', 'seg_former', 'a_net'])
     parser.add_argument('--num_classes', type=int, default=2)
     parser.add_argument('--in_channel', type=int, default=3)
     parser.add_argument('--benchmark', type=str, default='KolektorSDD1', choices=['KolektorSDD1', 'KolektorSDD2', 'CrackForest', 'RSDD1', 'Magnetic', 'RSDD2', 'NEUSEG'])
@@ -170,50 +168,18 @@ if __name__ == '__main__':
 
     # select block
     from models import *
-    if args.block == 'basic':
-        Block = BasicBlock
-    elif args.block == 'ssblock1':
-        Block = SkeletonStrengtheningBlock1
-    elif args.block == 'ssblock2':
-        Block = SkeletonStrengtheningBlock2
-    elif args.block == 'ssblock3':
-        Block = SkeletonStrengtheningBlock3
-    elif args.block == 'ssblock4':
-        Block = SkeletonStrengtheningBlock4
-    elif args.block == 'ssblock5':
-        Block = SkeletonStrengtheningBlock5
-    elif args.block == 'ssblock9':
-        Block = SkeletonStrengtheningBlock9
-    else:
-        raise AttributeError("输入正确的模块名")
-
-    # select attention block
-    if args.attention == 'SE':
-        Attention = SE
-    elif args.attention == 'CBAM':
-        Attention = CBAM
-    elif args.attention == 'CBAM':
-        Attention = CBAM
-    else:
-        Attention = None
 
     # select model
-    if args.model_type == 'dlasdd':
-        model = dlasdd.SegNetwork(args.in_channel, 1024, args.num_classes)
-    elif args.model_type == 'psp_net':
+    if args.model_type == 'psp_net':
         model = PSPNet(args.in_channel, args.num_classes)
     elif args.model_type == 'seg_net':
-        model = SegNet(args.in_channel, args.num_classes, Block, Attention)
+        model = SegNet(args.in_channel, args.num_classes)
     elif args.model_type == 'u_net':
-        model = UNet(args.in_channel, args.num_classes, Block, Attention)
+        model = UNet(args.in_channel, args.num_classes)
     elif args.model_type == 'deeplabv3':
         model = DeepLabV3(args.in_channel, args.num_classes)
     elif args.model_type == 'ss_net':
-        model = SSNet(args.in_channel, args.num_classes, Block, Attention, Encoder='vgg')
-    elif args.model_type == 'ss_net2':
-        model = SSNet2(args.in_channel, args.num_classes, Block, Attention, Encoder='vgg')
-    elif args.model_type == 'ss_net3':
-        model = SSNet3(args.in_channel, args.num_classes, Block, Attention, Encoder='vgg')
+        model = SKSNet(args.in_channel, args.num_classes)
     elif args.model_type == 'edr_net':
         model = EDRNet(args.in_channel, args.num_classes)
     elif args.model_type == 'resunet_pp':
@@ -280,7 +246,7 @@ if __name__ == '__main__':
                 os.remove(last_best_name)
             best_val_miou = val_miou
             Logger.save_model_miou(model, epoch, val_miou)
-            filename = f'{args.save_path}/{args.benchmark}_{args.model_type}_{args.block}_{args.attention}_epoch{str(epoch)}' \
+            filename = f'{args.save_path}/{args.benchmark}_{args.model_type}_epoch{str(epoch)}' \
                        f'_miou{str(round(best_val_miou, 4))}' \
                        f'_pixacc{str(round(val_pa, 4))}' \
                        f'_dice{str(round(val_dice, 4))}.pth'
